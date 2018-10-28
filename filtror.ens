@@ -1,0 +1,80 @@
+; Titulación: Grado en Informática. Plan 2009.
+; Materia:    Estructura de Computadores.
+; Archivo:    filtror.ens (Proyecto ensamblador)
+; Autores:    Carlos Rivas Pérez (Y160168)
+;------------------------------------------------------------------
+org 0
+nF: data 5;
+org 20
+
+;-------------------------------------------------------------------
+;-----------------------------MACROS--------------------------------
+;-------------------------------------------------------------------
+
+PUSH :	MACRO(reg)
+		subu r30, r30,4
+		st reg, r30, r0
+		ENDMACRO
+		
+POP : 	MACRO (reg)
+		ld reg, r30, r0
+		addu r30, r30,4
+ENDMACRO
+
+;---------------------------NFILTRADOS------------------------------
+; Subrutina NFiltrados: Paso de parámetro en registro (r10)
+;             Objetivo: contar el número de veces que se pasa el filtro a la imagen.
+;             Parámetros de entrada:
+;               r10 contiene el operando oper, entrada de la subrutina,
+;				siendo el número de veces que se pasa el filtro. Casos:
+;									oper  >= 0 --> nF = oper.
+;									oper  <  0 --> nF = nF-1 (limitado a 0).
+;													si nF<0 -> nF=0
+
+nFiltrados:	ld   r10, r30, r0; r10 <- oper
+			ld   r11,  r0, r0; inicio r11 = nF(0x0000)
+			xor  r29, r29, r29;
+			cmp   r7, r10, r0; ¿oper >= 0?
+			bb1   ge,  r7, es_mayor
+;			oper < 0
+			subu r11, r11,  1; nF = nF -1
+			cmp   r7, r11, r0; ¿nF < 0?
+			bb1   lt,  r7, es_menor
+;			nF >= 0
+			st 	  r0, r10, r0; 0x0000 <- nF
+			st 	 r29,  r0, r0; r29 <- M(0x0000)
+			br fin
+es_mayor:	st 	r0, r10, r0; 0x0000 <- oper
+			st r29, r0, r0; r29 <- M(0x0000) 
+			br fin
+es_menor; 	st  r0, r0, r0; nF iniciado a 0
+			st r29, r0, r0; r29 <- 0
+			br fin
+fin: 		jmp(r1)
+			
+			
+
+			
+			
+			
+			
+			
+			
+			
+			
+			
+			
+			
+			
+			
+			
+			
+			
+			
+			
+			
+			
+			
+			
+			
+			
