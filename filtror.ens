@@ -1,66 +1,802 @@
 ; Titulación: Grado en Informática. Plan 2009.
 ; Materia:    Estructura de Computadores.
 ; Archivo:    filtror.ens (Proyecto ensamblador)
-; Autores:    Carlos Rivas Pérez (Y160168)
-;------------------------------------------------------------------
-org 0
-nF: data 5;
-org 20
+; Autor:      Carlos Rivas Pérez (Y160168)
+;             
 
+;-------------------------------------------------------------------
+;-------------------------------------------------------------------
 ;-------------------------------------------------------------------
 ;-----------------------------MACROS--------------------------------
 ;-------------------------------------------------------------------
+org 0
+nF: data 100
+org 20
 
-PUSH :	MACRO(reg)
-		subu r30, r30,4
-		st reg, r30, r0
-		ENDMACRO
-		
-POP : 	MACRO (reg)
-		ld reg, r30, r0
-		addu r30, r30,4
+LEA: MACRO (ra, eti)
+or ra, r0, low(eti)
+or.u ra, ra, high(eti)
 ENDMACRO
 
-;---------------------------NFILTRADOS------------------------------
+PUSH: MACRO(ra)
+subu r30, r30, 4
+st ra, r30, 0
+ENDMACRO
+
+POP: MACRO(ra)
+ld ra, r30, 0
+addu r30, r30, 4
+ENDMACRO
+;-------------------------------------------------------------------
+;-----------------------------SUBRUTINAS----------------------------
+;-------------------------------------------------------------------
+; Subrutina Sqrt: 
+;			Parametros de entrada:
+;				Num: contiene el numero del que se quiere encontrar 
+;					la raiz cuadrada. Entero positivo pasado por valor (4B)
+;			Valor de retorno:
+;				rc: aproximacion entera a la raiz cuadrada. Numero positivo no nulo.
+
+Sqrt:				ld	r10, r30,  r0				;r10 <- valor de Num
+					or  r29,  r0,  r0				;r29 <- inicializo r29
+					cmp	 r5, r10,   2				;Num < 2 -> r29 = Num
+					bb1	 lt,  r5, menorDos
+					xor	r11, r11, r11				;r11 inicializado a cero
+					addu r11, r11,   1				;r11 = 1 (parametro b en algoritmo babilonico)
+					xor r12, r12, r12
+					addu r12, r12,r10				;r12 = Num (parametro a en algoritmo babilonico)
+babilonia:			add	r12, r12, r11				;r12 <- (a+b)
+					divu r12, r12,  2				;r12 <- (a+b)/2
+					divu r11, r10,r12				;r11 <- Num/a
+					cmp	 r5, r11, r12				;Si b > a intercambio a con b 
+					bb1	 lt,  r5, no_intercambio	;cambio la logica en favor de la estructura del bucle
+					xor	r13, r13, r13				;r13 <- 0 (lo llamo c para hacer el intercambio de valores entre a y b)
+					addu r13, r13, r11				;r13 <- b (c=b
+					xor r11,r11,r11
+					addu r11, r11, r12				;r11 <- r12 (b=a)
+					xor r12,r12,r12
+					addu r12,r12,r13				;r12 <- r13 (a=c)
+no_intercambio:		xor	r14, r14, r14
+					sub	r14, r12, r11				;r14 <- a-b
+					cmp  r5, r14,	1				;(a-b)<=1 -> fin
+					bb1	 gt,  r5, babilonia			;cambio la logica en favor de la salida del bucle
+					xor r29,r29,r29
+					addu r29, r29,r11   			;r29 <- r11 (r29 = b)
+					br	sqFin
+menorDos:			addu r29, r10, r29				;r29 <- r10 (r29 = Num) Num<2
+sqFin:				jmp(r1)
+
+;-------------------------------------------------------------------
+;-----------------------------FINAL SQRT----------------------------
+;-------------------------------------------------------------------
+
+
 ; Subrutina NFiltrados: Paso de parámetro en registro (r10)
 ;             Objetivo: contar el número de veces que se pasa el filtro a la imagen.
 ;             Parámetros de entrada:
 ;               r10 contiene el operando oper, entrada de la subrutina,
 ;				siendo el número de veces que se pasa el filtro. Casos:
-;									oper  >= 0 --> nF = oper.
-;									oper  <  0 --> nF = nF-1 (limitado a 0).
-;													si nF<0 -> nF=0
+;									oper  < 0 --> restamos 1 a nF
+;													-> Si nF < 0 reajustamos con nF = 0
+;									oper >= 0 --> nF = oper
+;             Resultados:
+;               r29 contendrá el número de veces que se ha pasado el filtro.
+;				Casos:
+;									oper  < 0 --> nF = 0
+;									oper >= 0 --> nF = oper
+;
+;
 
-nFiltrados:	ld   r10, r30, r0; r10 <- oper
-			ld   r11,  r0, r0; inicio r11 = nF(0x0000)
-			xor  r29, r29, r29;
-			cmp   r7, r10, r0; ¿oper >= 0?
-			bb1   ge,  r7, es_mayor
-;			oper < 0
-			subu r11, r11,  1; nF = nF -1
-			cmp   r7, r11, r0; ¿nF < 0?
-			bb1   lt,  r7, es_menor
-;			nF >= 0
-			st 	  r0, r10, r0; 0x0000 <- nF
-			st 	 r29,  r0, r0; r29 <- M(0x0000)
-			br fin
-es_mayor:	st 	r0, r10, r0; 0x0000 <- oper
-			st r29, r0, r0; r29 <- M(0x0000) 
-			br fin
-es_menor; 	st  r0, r0, r0; nF iniciado a 0
-			st r29, r0, r0; r29 <- 0
-			br fin
-fin: 		jmp(r1)
-			
-			
+nFiltrados: 		ld	r10, r30, r0			;r10 <- oper
+					ld  r11,  r0, r0			;r11 <- nF(0x00000)
+					xor r29, r29,r29			;r29 lo inicializamos a 0
+					cmp  r5, r10, r0			;comprobamos si es menor que 0
+					bb1  lt,  r5, Negativo   	;
+					st  r10,  r0, r0		    ;ponemos el valor de nF al valor de oper
+					xor	r29,r29,r29
+					addu r29, r29, r10			;r29 <- valor de r10
+					br fin
+Negativo:			sub	r11, r11,  1			;r11 (nF) <- -1
+					cmp  r5, r11, r0			;Si r11 < 0 -> nF = 0
+					bb1  lt,  r5, ponerCero		;
+					st	r11,  r0, r0			;guardamos valor de r11 en nF (0x0000)
+					xor r29,r29,r29
+					addu r29, r29, r11			;r29 <- valor de r11
+					br fin
+ponerCero:			xor r29,r29,r29
+					st 	r29,  r0, r0			;guardamos 0 en nF
+fin:				jmp(r1)
 
+;-------------------------------------------------------------------
+;-----------------------------FINAL NFILTRADOS----------------------
+;-------------------------------------------------------------------			
 			
+;Subrutina Comp: Paso de parametros:
+;					-Imagen1: Matriz que contiene la primera de las imagenes que se
+;							han de comparar.
+;							Se pasa por dirección, ocupa 4 bytes.
+;							Numero de filas (M).
+;							Numero de columnas(N).
+;							MxN/4 palabras.
+;					-Imagen2: Matriz que contiene la segunda de las imagenes que
+;							han de comparar.
+;							Se pasa por dirección, ocupa 4 bytes.
+;							Numero de filas (M).
+;							Numero de columnas(N).
+;							MxN/4 palabras.
+;					Valor de retorno:
+;					-Diferencia: La funcion devuelve una medida de la diferencia
+;							entre las dos imagenes que se han pasado como parámetro.
+;							Es la suma para todos los pixeles de los valores absolutos
+;							de la diferencia entre cada par de pixeles situados en la
+;							misma posicion de Imagen1 e Imagen2.	
+;
+
+Comp:   			PUSH(r1)
+					ld r20,r30,4		;r20<-Img1 puntero a Img1
+					ld r21,r30,8  		;r21<-Img2 puntero a Img2
+					or r2,r0,r0   		;Inicializamos a 0
+					ld r5,r20,r0  		;En r5 ponemos las filas de r20 en Img1
+					ld r6,r20, 4  		;En r6 ponemos las filas de r20+4 en Img1
+					mulu r4,r5,r6 		;Obtenemos en r4 el número de elementos que hay en cada matriz
+					addu r20,r20,8		;Apuntamos con r20 al primer elemento de Img1
+										;Como las matrices tienen el mismo tamaño ponemos r21 al primer elemento de Img2
+					addu r21,r21,8
+compa:				cmp r3,r4,0			;Nos aseguramos de que hemos acabado de comparar Img1 y Img2
+					bb1 eq,r3,fincomp
+										;Cargamos un elemento de Img1 y Img2 y los restamos
+					ld.bu r10,r20,r0
+					ld.bu r11,r21,r0 
+					subu r12,r10,r11
+										;Observamos que la resta nos da negativo e indicamos si es menor para cambiar el signo
+					mulu r12,r12,r12	;cuadrado del valor de la diferencia
+					addu r2,r12,r2 		;Sumamos la resta a r2 (acumulador)
+					
+					addu r20,r20,1		;Actualizamos punteros y contadores para volver a comparar
+					addu r21,r21,1
+					
+					subu r4,r4,1
+					br compa
+fincomp: 			PUSH(r2)
+					bsr Sqrt 
+					POP(r2)
+					POP(r1)
+					jmp(r1)
+
+;-------------------------------------------------------------------
+;-----------------------------FINAL COMP----------------------------
+;-------------------------------------------------------------------
+		
+;Subrutina ValorPixel: Paso de parámetros:
+;						-SubImg: Matriz 3x3 que contiene el conjunto de 9 valores
+;								(bytes sin signo)
+;								Se pasa por dirección, ocupa 4 bytes
+;						-MFiltro: Matriz cuadrada que define el filtro a aplicar
+;								Se pasa por dirección , ocupa 4 bytes
+;								Define la posición de memoria en la que se encuentra
+;								el filtro formada por 9 elementos que definen los 
+;								coheficientes de la matriz de filtro(Cada elementos es
+;								un entero sin signo)
+;						Valor de retorno:
+;						-VPixel: Devuelve en r29 una aproximación del valor que se le 
+;								asignará al pixel seleccionado una vez aplicado el filtro.
+;								Es un entero que puede tener cualquier valor positivo o 
+;								negativo.
+
+ValorPixel:			or r2, r0, r0			;pongo a cero todos los registros
+					or r3, r0, r0
+					or r4, r0, r0
+					or r5, r0, r0
+					or r6, r0, r0
+					or r7, r0, r0
+					or r8, r0, r0
+					or r9, r0, r0
+					or r10, r0, r0
+					or r11, r0, r0
+					or r12, r0, r0
+					or r13, r0, r0
+					or r14, r0, r0
+					or r15, r0, r0
+					or r16, r0, r0
+					or r17, r0, r0
+					or r18, r0, r0
+					or r19, r0, r0
+					or r20, r0, r0
+					or r21, r0, r0
+					or r22, r0, r0
+					or r23, r0, r0
+					or r24, r0, r0
+					or r25, r0, r0
+					or r26, r0, r0
+					or r27, r0, r0
+					or r28, r0, r0
+					or r29, r0, r0
+					
+					ld 		r20,r30,0			;r20 <- puntero SubImg
+					ld 		r21,r30,4			;r21 <- puntero Mfiltro
+					addu 	r18,r18,256			;r18 <- k = 256 (constante para operaciones)
+					addu 	r2,	r2,	9			;r2  <- contador
+					
+bucle_val: 			cmp 	r3,	r2,	0 			;Comenzamos comparando si r2 es 0
+					bb1 	eq, r3,	final 		;Si es igual a 0 saltamos a final
+					ld.bu	r10,r20,r0			;r10 <- pixel de SubImg (sin signo)
+					mulu	r10,r10,r18			;r10 <- pixel*256
+					ld 		r11,r21,r0			;r11 <- numerador (Mfiltro)
+					addu	r21,r21,4			;r21 <- avanzo puntero
+					ld		r12,r21,r0			;r12 <- denominador (Mfiltro)
+					muls	r10,r10,r11			;r10 <- multiplico * numerador
+					divs	r10,r10,r12			;r10 <- divido / denominador
+					
+					addu	r29,r29,r10			;r29 <- sumo lo acumulado mas la nueva iteracion
+												;Se Actualizan punteros y se decrementa el contador 
+					sub 	r2,	r2,	1			;restamos un elemento a los 9 totales 
+					addu 	r20,r20,1     		;r20 <- siguiente
+					addu 	r21,r21,4			;r21 <- siguiente
+					br 		bucle_val			;otra iteracion
+final: 				
+					divs 	r29, r29, r18		;el resultado acumulado se divide entre 256
+					jmp(r1)		
 			
+;-------------------------------------------------------------------
+;-----------------------------FINAL VALOR PIXEL---------------------
+;-------------------------------------------------------------------
+
+; Subrutina SubMatriz: Paso de parámetros:
+;					-Imagen : Matriz que contiene la imagen de la que se extrae una
+;					submatriz 3x3.
+;					Se pasa por direccion (4 bytes)
+;					Numero de Filas (M)
+;					Numero de Columnas (N)
+;					Elementos almacenados por filas(byte sin signo)
+;					Total de elementos = MxN
+;					-SubImg: Matriz 3x3 en la que se deposita la submatriz de la imagen
+;					de entrada.
+;					Se pasa por dirección (4 bytes)
+;					Quedará relleno con los 9 valores (byte sin signo)
+;					-i :	Numero de fila(entre 1 y M-2) del pixel de la imagen 
+;					proporcionada por Imagen que será el pixel central de la 
+;					submatriz resultado
+;					Se pasa por valor
+;					-j 	:	Numero de columna (comprendido entre 1 y N-2) del pixel
+;					de la imagen proporcionada por Imagen que será el pixel central
+;					de la submatriz resultado
+;					Se pasa por valor
+;
+;				
+	
+	
+SubMatriz: 								;Escogemos los datos necesarios y los iniciamos a 0
+				xor r20,r20,r20			;Comenzamos iniciando todos los registros a utilizar
+				xor r21,r20,r20	
+				xor r18,r20,r20
+				xor r19,r20,r20
+				xor r3,r20,r20
+				xor r2,r20,r20
+				xor r4,r20,r20
+				xor r6,r20,r20
+				xor r7,r20,r20
+				xor r5,r20,r20
+				xor r8,r20,r20
+				xor r22,r20,r20
+				xor r10,r20,r20
+				xor r11,r20,r20
+				ld r20,r30,0 			;r20 -> Puntero a Imagen
+				ld r21,r30,4 			;r21 -> Puntero a SubImg 
+				ld r10,r30,8 			;r10 -> Filas del elemento 
+				ld r11, r30,12 			;r11 -> Columnas del elemento 
+				ld r18,r20,0 			;r18 -> Filas de la matriz Imagen
+				ld r19,r20,4 			;r19 -> Columnas de la matriz Imagen 
+				addu r20,r20,8 			;r20 al primer elemento de Imagen
+										;Comprobamos si el elemento está en el esExtremo de la matriz
+				cmp r3,r10,0
+				bb1 eq,r3,esExtremo
+				cmp r3,r11,0
+				bb1 eq,r3,esExtremo
+				subu r2,r18,1
+				cmp r3,r10,r2 
+				bb1 eq,r3,esExtremo
+				subu r2,r19,1
+				cmp r3,r11,r2
+				bb1 eq,r3,esExtremo
+				subu r4,r10,1 			;Iniciamos contador de filas
+				addu r6,r10,2 			;Condición de parada de filas
+bFilas: 		cmp r3,r4,r6
+				bb1 eq,r3,finalSubmatriz
+				subu r5,r11,1			;Inciamos contador de columnas
+				addu r7,r11,2 			;Condición de parada de columnas
+introducirolumnas: mulu r8,r19,r4		;Operamos para obtener el desplazamiento de r20 para conseguir el elemento de Imagen 
+				addu r8,r8,r5 
+				ld.bu r22,r20,r8 		;Obtenemos el elemento de imagen
+				st.b r22,r21,0  		;Lo guardamos en SubImg
+										;Se actualizan contadores y punteros
+				addu r5,r5,1
+				addu r21,r21,1
+										;Observamos si hay salir de introducirolumnas
+				cmp r3,r5,r7
+				bb0 eq,r3,introducirolumnas
+										;Actualizamos puntero de filas y volvemos al bucle
+				addu r4,r4,1
+				br bFilas;
+esExtremo:		or r9,r0,r0 			;Iniciamos un contador
+				addu r9,r9,9 
+				mulu r8,r19,r10 
+				addu r8,r8,r11			;Operamos para obtener el desplazamiento de r20
+				ld.bu r22,r20,r8		;y seleccionamos el elemento
+bucleesExtremo: cmp r3,r9,0
+				bb1 eq,r3,finalSubmatriz
+				st.b r22,r21,0
+										;Actualizamos contador y volvemos al bucle
+				subu r9,r9,1
+				addu r21,r21,1
+				br bucleesExtremo
+finalSubmatriz: jmp(r1)
 			
-			
-			
-			
-			
+;-------------------------------------------------------------------
+;-----------------------------FINAL SUBMATRIZ-----------------------
+;-------------------------------------------------------------------
+					
+					
+; Subrutina Filtro: Paso de parámetros.
+;					-Imagen: Matriz que contiene la imagen de entrada.
+;							Se pasa por dirección, ocupa 4 bytes
+;							Matrix de MxN (filas, columnas).
+;							Elementos almacenados por filas.
+;							Elemento tipo byte sin signo.
+;							MxN/4 palabras.
+;					-ImFiltrada: Matriz resultado de aplicar el filtro.
+;							Se pasa por dirección, ocupa 4 bytes
+;							Matrix de MxN (filas, columnas).
+;							Elementos almacenados por filas.
+;							Elemento tipo byte sin signo.
+;							MxN/4 palabras.
+;					-MFiltro: Matriz cuadrada que define el filtro a aplicar.
+;							Se pasa por dirección, ocupa 4 bytes
+;							Define la posicion de memoria en que se encuentra
+;								la especificaion del filtro.
+;							Contiene 9 elementos en los que cada uno es un entero
+;								con signo.
+
+
+Filtro:	 		;Se crea el marco de pila
+				PUSH (r1)
+				PUSH (r31)
+				or r31,r30,r30
+				subu r30,r30,24
+				ld r20,r31,8		;r20 -> Puntero a imagen
+				ld r10,r20,0 		;r10 -> Filas de Imagen
+				ld r11,r20,4		;r11 -> Columnas de Imagen
+				addu r20,r20,8 		;Nos posicionamos en el primer elemento de la imagen
+				mulu r12,r10,r11 	;Tamaño de imagen 
+				ld r21, r31,12 		;r21 -> Puntero a Imfiltrada
+				st r10,r21,0  		;Almacenamos las filas de Imfiltrada
+				st r11,r21,4 		;Almacenamos las columnas de Imfiltrada
+				addu r21,r21,8 		;Nos posicionamos en el primer elemento de Imfiltrada
+				ld r22,r31,16 		;r22 -> Puntero a Mfiltro
+				or r5,r0,r0 		;r5  -> Contador de filas 
+				or r6,r0,r0 		;r6  -> Contador de columnas
+sig_fila: 		cmp r3,r5,r10
+				bb1 eq,r3,finalFiltro
+				or r6,r0,r0 		;Contador de columnas
+sig_columna: 	ld r8,r31,8			;Puntero al comienzo de Imagen
+				ld r9,r31,16		;Puntero al comienzo de Mfiltro
+									;Se guardan los datos necesarios en el marco de pila
+				st r5,r31,-4
+				st r6,r31,-8
+				st r20,r31,-12
+				st r21,r31,-16
+				st r10,r31,-20
+				st r11,r31,-24; I860
+				PUSH(r9)
+				PUSH(r6)
+				PUSH(r5)
+				PUSH(r8)
+				bsr FilPixel
+				addu r30,r30,16 	;Pasamos de los parámetros
+									;Se recuperan los datos necesario del marco de pila
+				ld r5,r31,-4
+				ld r6,r31,-8
+				ld r20,r31,-12
+				ld r21,r31,-16
+				ld r10,r31,-20
+				ld r11,r31,-24
+				st.b r29,r21,r0 	;Ubicamos en Imfiltrada el pixel filtrado
+									;Se actualizan punteros e incrementamos punteros
+				addu r6,r6,1
+				addu r20,r20,1
+				addu r21,r21,1
+				cmp r3,r6,r11
+				bb0 eq,r3,sig_columna
+				addu r5,r5,1
+				br sig_fila
+finalFiltro:	or r30,r31,r31
+				POP(r31)
+				POP(r1)
+				jmp(r1)
+
+;-------------------------------------------------------------------
+;-----------------------------FINAL FILTRO--------------------------
+;-------------------------------------------------------------------
+
+; Subrutina FilPixel: Paso de parámetros.
+;					-Imagen: Matriz que contiene la imagen de entrada.
+;							Se pasa por dirección, ocupa 4 bytes
+;							Matrix de MxN (filas, columnas).
+;							Elementos almacenados por filas.
+;							Elemento tipo byte sin signo.
+;							MxN/4 palabras.
+;					-i:		Numero de fila(entre 0 y M-1) del pixel de la imagen 
+;							proporcionada por Imagen al que se quiere aplicar la 
+;							mascara definida por MFiltro
+;							Se pasa por valor
+;					-j:		Numero de columna (comprendido entre 0 y N-1) del pixel
+;							de la imagen proporcionada por Imagen al que se quiere
+;							aplicar la mascara proporcionada por MFiltro
+;							Se pasa por valor
+;					-MFiltro: Matriz cuadrada que define el filtro a aplicar.
+;							Se pasa por dirección, ocupa 4 bytes
+;							Define la posicion de memoria en que se encuentra
+;								la especificaion del filtro.
+;							Contiene 9 elementos en los que cada uno es un entero
+;								con signo.
+; 						Valor de retorno:
+;					-VPixel: Devuelve el valor que se ha de asignar al pixel ij 
+;					de la imagen filtrada. 
+;					Entero sin signo devuelto en r29
+
+
+FilPixel: 		or r2, r0, r0			;pongo a cero todos los registros
+				or r3, r0, r0
+				or r4, r0, r0
+				or r5, r0, r0
+				or r6, r0, r0
+				or r7, r0, r0
+				or r8, r0, r0
+				or r9, r0, r0
+				or r10, r0, r0
+				or r11, r0, r0
+				or r12, r0, r0
+				or r13, r0, r0
+				or r14, r0, r0
+				or r15, r0, r0
+				or r16, r0, r0
+				or r17, r0, r0
+				or r18, r0, r0
+				or r19, r0, r0
+				or r20, r0, r0
+				or r21, r0, r0
+				or r22, r0, r0
+				or r23, r0, r0
+				or r24, r0, r0
+				or r25, r0, r0
+				or r26, r0, r0
+				or r27, r0, r0
+				or r28, r0, r0
+				;Creacion del marco de pila
+				PUSH (r1)
+				PUSH (r31)
+				or r31,r30,r30
+				subu r30,r30,12
+				ld r20,r31,8 			;r20 -> Puntero a la imagen
+				ld r10,r31,12 			;r10 -> Fila en la que se encuenta el elemento
+				ld r11,r31,16 			;r11 -> Columna en la que se encuentra el elemento
+				or r22,r30,r30			;r22 -> Puntero a subimg
+				PUSH (r11)
+				PUSH (r10)
+				PUSH (r22)
+				PUSH (r20)
+				bsr SubMatriz
+										;Pasamos de los parámetros que hemos introducido
+				addu r30,r30,16
+				or r22,r30,r30
+				ld r21,r31,20 			;r21 -> Puntero a Mfiltro
+				PUSH (r21)
+				PUSH (r22)
+				bsr ValorPixel
+				addu r30,r30,8			;Pasamos de los parametros
+				or r2,r29,r29
+				ld r21,r31,20 
+				xor r18,r18,r18	
+				add r18,r18,255			;r18<-255
+				cmp r3,r2,r0			;comparo si el valor devuelto por valorpixel
+				bb1 lt,r3, menor_cero		;es menor que cero
+				cmp r3,r2,r18			;comparo si el valor devuelto por valorpixel
+				bb1 gt,r3, maximo			;es mayor que 255
+				br finalFilPixel
+menor_cero:		xor r29,r29,r29			;si es menor que cero ajusto a cero
+				br finalFilPixel
+maximo:			xor r29,r29,r29
+				add r29,r29,r18			;si es mayor que 255 ajusto a 255
+finalFilPixel:	or r30,r31,r31
+				POP(r31)
+				POP(r1)
+				jmp(r1)
+					
+					
+;-------------------------------------------------------------------
+;-----------------------------FINAL FILPIXEL------------------------
+;-------------------------------------------------------------------					
+					
+; Subrutina FiltRec: Paso de parámetros:
+;					-ImagenIn: Matriz que contiene la imagen de entrada.
+;							Se pasa por dirección, ocupa 4 bytes
+;							Matrix de MxN (filas, columnas).
+;							Elementos almacenados por filas.
+;							Elemento tipo byte sin signo.
+;							MxN/4 palabras.
+;                   -ImagenOut: Matriz que contiene la imagen de salida.
+;							Se habrá aplicado el filtro n veces.
+;							Se pasa por dirección, ocupa 4 bytes.
+;							Elementos almacenados por filas.
+;							Elemento tipo byte sin signo.
+;							MxN/4 palabras.
+;					-MFiltro: Es la matriz cuadrada que define el filtro.
+;							Se pasa por dirección, ocupa 4 bytes.
+;							Define la posicion de memoria en que se encuentra.
+;								la especificacion del filtro, 9 elementos en la matriz.
+;					-NCambios: Es el valor minimo de la diferencia entre ImagenIn y ImagenOut.
+;							Determina la necesidad de realizar un nuevo filtrado.
+;							Es un entero, se pasa por valor (ocupa 4 bytes).
+;							Diferencia se especifica en subrutina Comp.
+;
+;					Valor de retorno;
+;					-Diferencia: Devuelve la medida de diferencia entre las imagenes
+;								ImagenIn e ImagenOut. Proporcionada por la subrutina Comp.
+;								El retorno es un entero sin signo, devuelto en r29.
+
+FiltRec:	or r2, r0, r0			;pongo a cero todos los registros
+			or r3, r0, r0
+			or r4, r0, r0
+			or r5, r0, r0
+			or r6, r0, r0
+			or r7, r0, r0
+			or r8, r0, r0
+			or r9, r0, r0
+			or r10, r0, r0
+			or r11, r0, r0
+			or r12, r0, r0
+			or r13, r0, r0
+			or r14, r0, r0
+			or r15, r0, r0
+			or r16, r0, r0
+			or r17, r0, r0
+			or r18, r0, r0
+			or r19, r0, r0
+			or r20, r0, r0
+			or r21, r0, r0
+			or r22, r0, r0
+			or r23, r0, r0
+			or r24, r0, r0
+			or r25, r0, r0
+			or r26, r0, r0
+			or r27, r0, r0
+			or r28, r0, r0	
+			PUSH(r1)
+			PUSH(r31)
+			or r31,r30,r30
+			;(1)	Se reserva el espacio para ImagenTMP. Primero se calcula el tamaño mxn
+			ld r20,r31,8		;r20 <- Puntero a ImagenIn
+			ld r10,r20,0		;r10 <- filas(M)
+			ld r11,r20,4 		;r11 <- columnas(N)
+			mulu r12,r10,r11	;r12 <- mxn
+								;Para el alineamiento a palabra comprobamos si mxn es multiplo de 4					
+			divu r13,r12,4		;r13 <- mxn / 4
+			mulu r13,r13,4		;r13 <- r13*4
+			cmp r3,r12,r13		;Se observa si r12 == r13
+			bb1 eq,r3,reserva	;Si son iguales r13 -> espacio a reservar
+			addu r13,r13,4		;Si no, hay que darle una palabra mas
+reserva:	addu r13,r13,8		;Una palabra mas para las filas(+4) y las columnas(+4)
+			subu r30,r30,r13	;Se reserva el espacio necesario
+			;(1)
+			;(2)
+			ld r21,r31,12		;r21 <- puntero a ImagenOut
+			ld r22,r31,16		;r22 <- puntero a Mfiltro
+			PUSH(r22)
+			PUSH(r21)
+			PUSH(r20)
+			bsr Filtro
+			;(2)
+			;(3)
+			addu r30,r30,12		;pasamos de los datos metidos anteriormente (r22,r21,r20)
+								;Se hace una copia de ImagenOut en ImagenTMP
+			ld r20,r31,8
+			ld r21,r31,12
+			ld r22,r31,16		;r21 <- Puntero a ImagenOut
+			or r25,r30,r30		;r25 <- puntero en ImagenTMP
+			ld r10,r21,0		;r10 <- filas(M)
+			ld r11,r21,4 		;r11 <- columnas(N)
+			mulu r12, r10, r11
+			addu r21,r21,8		;r21 <- primer elemento de ImagenOut
+			st r10,r25,0		;Filas -> M(r25)
+			st r11,r25,4		;Columnas -> M(r25+4)
+			addu r25,r25,8		;r25 en el primer elemento de ImagenTMP
+			or r2,r0,r0			;contador para el desplazamiento
+introducir: cmp r3,r2,r12 		;Iniciamos un bucle para insertar objetos
+			bb1 eq,r3,fin_introducir
+			ld.b r16,r21,r0		;r16 <- elemento de ImagenOut
+			st.b r16,r25,r0		;r16 -> M(r25) ImagenTMP
+								;Se actualiza el desplazamiento y r21
+			addu r2,r2,1;
+			addu r21,r21,1
+			addu r25,r25,1
+			br introducir
+			;(3)
+			;(4)
+fin_introducir:	
+			or r2,r0,r0			;r2 <- limpio
+			add r2,r2,-1		;r2 <- -1
+			PUSH(r2)
+			bsr nFiltrados
+			addu r30,r30,4		;pasamos del valor con el que llamamos a nFiltrados
+			cmp r3,r29,r0		;comparamos si r29 == 0	
+			bb1 eq,r3,poner_negativo
+			;(4)
+			;(5)
+			ld r20,r31,8		;r20 <- Puntero a ImagenIn
+			ld r21,r31,12		;r21 <- puntero a ImagenOut
+			PUSH(r21)
+			PUSH(r20)
+			bsr Comp
+			addu r30,r30,8		;pasamos de los parametros
+			ld r10,r31,20		;r10 <- Ncambios
+			cmp r3,r29,r10
+			bb1 lt,r3,finalFiltRec
+			;(6)
+								;No se ha llegado al final de la recursividad, se vuelve a FiltRec
+			or r25,r30,r30		;Se vuelve a poner un puntero en ImagenTMP
+			ld r21,r31,12		;Se vuelve a cargar ImagenOut
+			ld r22,r31,16		;Se vuelve a cargar MFiltro
+			ld r10,r31,20		;Se vuelve a cargar Ncambios
+			PUSH(r10)
+			PUSH(r22)
+			PUSH(r21)
+			PUSH(r25)
+			bsr FiltRec
+			;(6)
+poner_negativo: xor r29,r29,r29
+			sub r29,r29,1
+			br finalFiltRec
+			;(7)
+finalFiltRec:	or r30,r31,r31 		;Se destruye el marco de pila
+			POP(r31)
+			POP(r1)
+			jmp(r1)
+
+;-------------------------------------------------------------------
+;-----------------------------FINAL FILTREC-------------------------
+;-------------------------------------------------------------------
+;-------------------------------------------------------------------
+;-----------------------------FINAL SUBRUTINAS----------------------
+;-------------------------------------------------------------------
+;-------------------------------------------------------------------
+;-----------------------------PRUEBAS-------------------------------
+;-------------------------------------------------------------------
+;-----------------------------Datos usados -------------------------
+;Para el desarrollo del proyecto se han usado todos los datos proporcionados
+;por el pdf de Casos de Prueba
+
+;org 0x8000
+;IMAGEN: data 4, 8
+;data 0xFF0201FF, 0xFF0403FF
+;data 0xFF0605FF, 0xFF0807FF
+;data 0xFF0605FF, 0xFF0807FF
+;data 0xFF0201FF, 0xFF0403FF
+
+;IMAGEN1: data 4, 8
+;data 0x00000000, 0x00000000
+;data 0x00000000, 0x00002100
+;data 0x00000000, 0x00000000
+;data 0x00000000, 0x00000000
+
+;IMAGEN2:
+;data 4, 8
+;data 0x00000000, 0x00000000
+;data 0x00000000, 0x00000000
+;data 0x00000000, 0x00000000
+;data 0x00000000, 0x00000000
+
+;FILTRO: data 1, 8, 1, 8, 1, 8
+;data 1, 8, 0, 8, 1, 8
+;data 1, 8, 1, 8, 1, 8
+;org 0x8100
+
+;FILTRADA: res 40
+
+;Los programas principales que vienen a continuacion han sido reciclados de 
+;la convocatoria 2017/2018, donde presenté el proyecto junto con mi compañero
+;de entonces.
+;-----------------------------PPALNFIL------------------------------
+;PPALNFIL: 	addu r30, r30, 0x0000F000
+;			xor r10,r10,r10
+;			add r10, r10, 10
+;			PUSH(r10)
+;			bsr nFiltrados
+;			stop
+;-----------------------------PPALCOMP------------------------------			
+;PPALCOMP:	addu r30, r30, 0x0000F00
+;			or r20, r0, low(Imagen1)
+;			or.u r20, r20, high(Imagen1)
+;			or r21, r0, low(Imagen2)
+;			or.u r21, r21, high(Imagen2)
+;			PUSH(r21)
+;			PUSH(r20)
+;			bsr Comp
+;			stop		
+;-----------------------------PPALVPIXEL------------------------------			
+;PPALVPIXEL:	addu r30, r30, 0x0000F000
+;			or r20, r0, low(SubImg)
+;			or.u r20, r20, high(SubImg)
+;			or r21, r0, low(MFiltro)
+;			or r21,r21, high(MFiltro)
+;			PUSH(r21)
+;			PUSH(r20)
+;			bsr ValorPixel
+;			stop			
+;-----------------------------PPALSUBMATRIZ------------------------------			
+;PPALSUBMATRIZ:	addu r30, r30, 0x0000F000;
+;				or r20, r0, low(SubImg)
+;				or.u r20, r20, high(SubImg)
+;				or r21, r0, low(Imagen1)
+;				or.u r21, r20, high(Imagen1)
+;				or r22, r0, low(i)
+;				or.u r22, r22, high(i)
+;				or r23, r0, low(j)
+;				or.u r23, r23, high(j)
+;				PUSH(r23)
+;				PUSH(r22)
+;				PUSH(r20)
+;				PUSH(r21)
+;				bsr SubMatriz
+;				stop			
+;-----------------------------PPALFILPIXEL------------------------------				
+;PPALFILPIXEL:	or r22, r0, low(i)
+;				or.u r22, r22, high(i)
+;				or r23, r0, low(j)
+;				or.u r23, r23, high(j)
+;				or r24, r0, low(MFiltro)
+;				or.u r24, r24, high(MFiltro)
+;				or r21, r0, low(Imagen1)
+;				or.u r21, r20, high(Imagen1)
+;				PUSH(r24)
+;				PUSH(r23)
+;				PUSH(r22)
+;				PUSH(r21)
+;				bsr FilPixel
+;				stop				
+;-----------------------------PPALFILTRO------------------------------
+;PPALFILTRO: addu r30,r30,0x00008FF0
+;             or r20,r0,low(datosFim);
+;			  or.u r20,r20,high(datosFim);
+;		      or r21,r0,low(datosFimf);
+;		      or.u r21,r21,high(datosFimf);
+;		      or r22,r0,low(datosFmf);
+;		      or.u r22,r22,high(datosFmf);
+;		      PUSH(r22)
+;		      PUSH(r21)
+;		      PUSH(r20)
+;		      bsr Filtro;
+;			  addu r30,r30,12
+;		      stop
+;-----------------------------PPALFILTREC------------------------------	
+;Este programa principal ha sido extraido del enunciado del proyecto para
+;testear el funcionamiento correcto de filtrec		
+;org 0x8400
+;ppal: 	or r30, r0, 0x9000
+;		or r31, r30, r30
+;	addu r10, r0, 3 ; max: 3 filtrados
+;	PUSH (r10)
+;	bsr nFiltrados ; inicializa nF
+;	addu r30, r30, 4
+;	LEA (r10, IMAGEN)
+;	LEA (r11, FILTRADA)
+;	LEA (r12, FILTRO)
+;	or r13, r0, r0 ; NCambios=0
+;	PUSH (r13) ; NCambios
+;	PUSH (r12) ; FILTRO
+;	PUSH (r11) ; FILTRADA
+;	PUSH (r10) ; IMAGEN
+;	bsr FiltRec
+;	ret: addu r30, r30, 16
+;	stop	
 			
 			
 			
